@@ -1,5 +1,6 @@
 // ============================================================
 // 第二部分：后台任务 - worker.js (Web Worker)
+// 优化：缓存组合概率、回传消息ID解决竞态、修复missing计算
 // ============================================================
 
 /**
@@ -23,6 +24,7 @@ self.PC28_CONFIG = {
 class WorkerPredictionEngine {
   constructor(history = []) {
     this.history = history;
+    this._comboProbCache = null;
   }
 
   // 特码预测
@@ -36,13 +38,19 @@ class WorkerPredictionEngine {
       freq[item.number] = (freq[item.number] || 0) + 1;
     });
 
+    // 计算每个号码的遗漏期数（history[0]为最新）
     for (let i = 0; i < 28; i++) {
       let count = 0;
+      let found = false;
       for (let j = 0; j < this.history.length; j++) {
-        if (this.history[j].number === i) break;
+        if (this.history[j].number === i) {
+          found = true;
+          break;
+        }
         count++;
       }
-      missing[i] = count;
+      // 如果号码从未出现过，遗漏期数等于历史总长度
+      missing[i] = found ? count : this.history.length;
     }
 
     const comboProb = this._calculateCombinationProbability();
@@ -176,10 +184,10 @@ class WorkerPredictionEngine {
       else lastSmall = idx;
     });
 
-    killScores.KILL_ODD = recent.length - lastOdd;
-    killScores.KILL_EVEN = recent.length - lastEven;
-    killScores.KILL_BIG = recent.length - lastBig;
-    killScores.KILL_SMALL = recent.length - lastSmall;
+    killScores.KILL_ODD = lastOdd === -1 ? recent.length : recent.length - lastOdd;
+    killScores.KILL_EVEN = lastEven === -1 ? recent.length : recent.length - lastEven;
+    killScores.KILL_BIG = lastBig === -1 ? recent.length : recent.length - lastBig;
+    killScores.KILL_SMALL = lastSmall === -1 ? recent.length : recent.length - lastSmall;
 
     return Object.entries(killScores)
       .sort((a, b) => b[1] - a[1])
@@ -190,7 +198,13 @@ class WorkerPredictionEngine {
       }));
   }
 
+  /**
+   * 计算组合概率（结果固定，使用缓存避免重复计算）
+   * 模拟三个 0-9 的数字相加后对 28 取模的概率分布
+   */
   _calculateCombinationProbability() {
+    if (this._comboProbCache) return this._comboProbCache;
+
     const combo = {};
     for (let i = 0; i < 28; i++) combo[i] = 0;
 
@@ -203,11 +217,13 @@ class WorkerPredictionEngine {
       }
     }
 
-    const total = Object.values(combo).reduce((a, b) => a + b);
+    const total = Object.values(combo).reduce((a, b) => a + b, 0);
     const normalized = {};
     for (let key in combo) {
       normalized[key] = combo[key] / total;
     }
+
+    this._comboProbCache = normalized;
     return normalized;
   }
 }
@@ -216,50 +232,50 @@ class WorkerPredictionEngine {
 let engine = null;
 
 self.onmessage = function(event) {
-  const { type, payload } = event.data;
+  const { type, payload, id } = event.data;
 
   try {
     if (type === 'INIT') {
       engine = new WorkerPredictionEngine(payload.history || []);
-      self.postMessage({ type: 'INIT_SUCCESS' });
-    } 
+      self.postMessage({ type: 'INIT_SUCCESS', id });
+    }
     else if (type === 'UPDATE_HISTORY') {
       if (engine) {
         engine.history = payload.history;
-        self.postMessage({ type: 'UPDATE_SUCCESS' });
+        self.postMessage({ type: 'UPDATE_SUCCESS', id });
       }
     }
     else if (type === 'PREDICT_LUCKY') {
       if (engine) {
         const result = engine.predictLuckyNumber();
-        self.postMessage({ type: 'PREDICT_LUCKY_RESULT', result });
+        self.postMessage({ type: 'PREDICT_LUCKY_RESULT', result, id });
       }
     }
     else if (type === 'PREDICT_SINGLE_DOUBLE') {
       if (engine) {
         const result = engine.predictSingleDouble();
-        self.postMessage({ type: 'PREDICT_SINGLE_DOUBLE_RESULT', result });
+        self.postMessage({ type: 'PREDICT_SINGLE_DOUBLE_RESULT', result, id });
       }
     }
     else if (type === 'PREDICT_BIG_SMALL') {
       if (engine) {
         const result = engine.predictBigSmall();
-        self.postMessage({ type: 'PREDICT_BIG_SMALL_RESULT', result });
+        self.postMessage({ type: 'PREDICT_BIG_SMALL_RESULT', result, id });
       }
     }
     else if (type === 'PREDICT_DOUBLE_GROUP') {
       if (engine) {
         const result = engine.predictDoubleGroup();
-        self.postMessage({ type: 'PREDICT_DOUBLE_GROUP_RESULT', result });
+        self.postMessage({ type: 'PREDICT_DOUBLE_GROUP_RESULT', result, id });
       }
     }
     else if (type === 'PREDICT_KILL_GROUP') {
       if (engine) {
         const result = engine.predictKillGroup();
-        self.postMessage({ type: 'PREDICT_KILL_GROUP_RESULT', result });
+        self.postMessage({ type: 'PREDICT_KILL_GROUP_RESULT', result, id });
       }
     }
   } catch (err) {
-    self.postMessage({ type: 'ERROR', error: err.message });
+    self.postMessage({ type: 'ERROR', error: err.message, id });
   }
 };
