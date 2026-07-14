@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PC28 前端精英系统 v4.0 - 完全离线版</title>
+    <title>PC28 前端精英系统 v4.1 - 完全离线版</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -152,13 +152,18 @@
             font-size: 0.95em;
         }
 
-        button:hover {
+        button:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
         }
 
-        button:active {
+        button:active:not(:disabled) {
             transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .button-group {
@@ -242,6 +247,10 @@
             display: none !important;
         }
 
+        #file-input {
+            display: none;
+        }
+
         @media (max-width: 768px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -255,8 +264,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>🚀 PC28 前端精英系统 v4.0</h1>
-            <p class="subtitle">完全离线版 • IndexedDB持久化 • Web Worker并行计算 • Service Worker离线支持</p>
+            <h1>PC28 前端精英系统 v4.1</h1>
+            <p class="subtitle">完全离线版 - IndexedDB持久化 - Web Worker并行计算 - Service Worker离线支持</p>
         </header>
 
         <!-- 状态栏 -->
@@ -269,30 +278,33 @@
                 <div class="status-value" id="online-status">检测中...</div>
             </div>
             <div class="status-item">
-                <div class="status-label">📊 系统运行时间</div>
+                <div class="status-label">系统运行时间</div>
                 <div class="status-value" id="uptime">0秒</div>
             </div>
             <div class="status-item">
-                <div class="status-label">💾 数据库大小</div>
+                <div class="status-label">数据库大小</div>
                 <div class="status-value" id="db-size">计算中...</div>
             </div>
             <div class="status-item">
-                <div class="status-label">🔄 预测模式</div>
+                <div class="status-label">预测模式</div>
                 <div class="status-value" id="prediction-count">0个</div>
             </div>
         </div>
 
         <!-- 控制面板 -->
         <div class="card" style="margin-bottom: 30px;">
-            <div class="card-title">⚙️ 系统控制</div>
+            <div class="card-title">系统控制</div>
             <div class="button-group">
-                <button onclick="app.initialize()">🚀 初始化系统</button>
-                <button onclick="app.fetchDrawData()">📥 刷新数据</button>
-                <button onclick="app.getComprehensivePrediction()">🎯 获取预测</button>
-                <button onclick="app.getStats()">📈 查看统计</button>
-                <button onclick="app.exportData()">💾 导出备份</button>
-                <button onclick="clearUI()">🧹 清空界面</button>
+                <button id="btn-init" onclick="handleAction('init', app.initialize.bind(app))">初始化系统</button>
+                <button id="btn-fetch" onclick="handleAction('fetch', app.fetchDrawData.bind(app))">刷新数据</button>
+                <button id="btn-predict" onclick="handleAction('predict', app.getComprehensivePrediction.bind(app))">获取预测</button>
+                <button id="btn-stats" onclick="handleAction('stats', renderStats)">查看统计</button>
+                <button id="btn-export" onclick="handleAction('export', app.exportData.bind(app))">导出备份</button>
+                <button id="btn-import" onclick="document.getElementById('file-input').click()">导入备份</button>
+                <button id="btn-clear" onclick="handleAction('clear', clearAllData)">清空数据</button>
+                <button onclick="clearUI()">清空界面</button>
             </div>
+            <input type="file" id="file-input" accept=".json" />
             <div id="system-message" style="margin-top: 15px;"></div>
         </div>
 
@@ -300,7 +312,7 @@
         <div class="grid">
             <!-- 特码预测 -->
             <div class="card">
-                <div class="card-title">🎲 特码预测</div>
+                <div class="card-title">特码预测</div>
                 <div id="lucky-number" class="loading">
                     <div class="spinner"></div>
                     <p>等待数据...</p>
@@ -309,7 +321,7 @@
 
             <!-- 单双预测 -->
             <div class="card">
-                <div class="card-title">👯 单双预测</div>
+                <div class="card-title">单双预测</div>
                 <div id="single-double" class="loading">
                     <div class="spinner"></div>
                     <p>等待数据...</p>
@@ -318,7 +330,7 @@
 
             <!-- 大小预测 -->
             <div class="card">
-                <div class="card-title">📏 大小预测</div>
+                <div class="card-title">大小预测</div>
                 <div id="big-small" class="loading">
                     <div class="spinner"></div>
                     <p>等待数据...</p>
@@ -327,7 +339,7 @@
 
             <!-- 双组预测 -->
             <div class="card">
-                <div class="card-title">🎪 双组预测</div>
+                <div class="card-title">双组预测</div>
                 <div id="double-group" class="loading">
                     <div class="spinner"></div>
                     <p>等待数据...</p>
@@ -336,7 +348,7 @@
 
             <!-- 杀组预测 -->
             <div class="card">
-                <div class="card-title">⚔️ 杀组预测</div>
+                <div class="card-title">杀组预测</div>
                 <div id="kill-group" class="loading">
                     <div class="spinner"></div>
                     <p>等待数据...</p>
@@ -345,7 +357,7 @@
 
             <!-- 数据统计 -->
             <div class="card">
-                <div class="card-title">📊 系统统计</div>
+                <div class="card-title">系统统计</div>
                 <div id="system-stats" class="loading">
                     <div class="spinner"></div>
                     <p>计算中...</p>
@@ -355,7 +367,7 @@
 
         <!-- 历史记录 -->
         <div class="card">
-            <div class="card-title">📋 最近开奖记录</div>
+            <div class="card-title">最近开奖记录</div>
             <div id="history" class="loading">
                 <p>加载中...</p>
             </div>
@@ -368,9 +380,23 @@
     <script>
         let app = null;
 
+        // HTML转义工具函数 - 防止XSS攻击
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
+        // 安全设置元素内容
+        function setHTML(id, html) {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = html;
+        }
+
         // 初始化
         document.addEventListener('DOMContentLoaded', async () => {
-            console.log('🌟 页面加载完成');
+            console.log('页面加载完成');
             
             app = new PC28FrontendEliteApp();
             
@@ -388,9 +414,84 @@
                 }
             }, 1000);
 
+            // 文件导入监听
+            document.getElementById('file-input').addEventListener('change', handleFileImport);
+
             // 自动初始化
-            showMessage('💡 准备就绪，点击"初始化系统"开始', 'info');
+            showMessage('准备就绪，点击"初始化系统"开始', 'info');
         });
+
+        // 按钮操作包装器：添加加载状态和防抖
+        async function handleAction(buttonId, action) {
+            const button = document.getElementById(`btn-${buttonId}`);
+            if (!button) return;
+
+            // 防抖：如果按钮已禁用，说明操作正在进行
+            if (button.disabled) return;
+
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = `${originalText}...`;
+
+            try {
+                const result = await action();
+                
+                // 根据操作类型显示消息
+                if (buttonId === 'init') {
+                    if (result.code === 0) {
+                        showMessage('系统初始化成功！', 'success');
+                    } else {
+                        showMessage(`初始化失败：${escapeHtml(result.msg)}`, 'error');
+                    }
+                } else if (buttonId === 'export') {
+                    if (result.code === 0) {
+                        showMessage('数据导出成功！', 'success');
+                    } else {
+                        showMessage(`导出失败：${escapeHtml(result.msg)}`, 'error');
+                    }
+                } else if (buttonId === 'clear') {
+                    if (result.code === 0) {
+                        showMessage('所有数据已清空！', 'success');
+                        clearUI();
+                    } else {
+                        showMessage(`清空失败：${escapeHtml(result.msg)}`, 'error');
+                    }
+                }
+            } catch (err) {
+                showMessage(`操作出错：${escapeHtml(err.message)}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        // 清空数据
+        async function clearAllData() {
+            if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) {
+                return { code: 1, msg: '操作已取消' };
+            }
+            return await app.clearAllData();
+        }
+
+        // 文件导入处理
+        async function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showMessage('正在导入数据...', 'info');
+            const result = await app.importData(file);
+            
+            if (result.code === 0) {
+                showMessage(`导入成功！${escapeHtml(result.msg)}`, 'success');
+                await renderHistory();
+                await renderStats();
+            } else {
+                showMessage(`导入失败：${escapeHtml(result.msg)}`, 'error');
+            }
+
+            // 重置input以便重复导入同一文件
+            event.target.value = '';
+        }
 
         function updateOnlineStatus() {
             const indicator = document.getElementById('online-indicator');
@@ -398,7 +499,7 @@
             
             if (navigator.onLine) {
                 indicator.className = 'status-indicator online';
-                status.textContent = '在线 ✓';
+                status.textContent = '在线';
                 status.style.color = '#4ade80';
             } else {
                 indicator.className = 'status-indicator offline';
@@ -410,78 +511,87 @@
         function showMessage(text, type = 'info') {
             const container = document.getElementById('system-message');
             const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
-            container.innerHTML = `<div class="info-box ${className}">${text}</div>`;
+            // 使用 escapeHtml 防止消息内容注入
+            container.innerHTML = `<div class="info-box ${className}">${escapeHtml(text)}</div>`;
         }
 
         function renderLuckyNumber(data) {
-            if (data.error) {
-                document.getElementById('lucky-number').innerHTML = 
-                    `<div class="info-box error">${data.error}</div>`;
+            if (!data || data.error) {
+                setHTML('lucky-number', 
+                    `<div class="info-box error">${escapeHtml(data ? data.error : '暂无数据')}</div>`);
+                return;
+            }
+
+            if (!Array.isArray(data) || data.length === 0) {
+                setHTML('lucky-number', '<div class="info-box">暂无预测数据</div>');
                 return;
             }
 
             let html = '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
             data.slice(0, 5).forEach(pred => {
+                const num = escapeHtml(pred.number);
+                const score = escapeHtml(pred.score);
                 html += `
                     <div style="background: rgba(102, 126, 234, 0.2); padding: 12px; border-radius: 6px; text-align: center;">
-                        <div class="number-ball">${String(pred.number).padStart(2, '0')}</div>
-                        <div style="color: #60a5fa; font-size: 0.8em; margin-top: 5px;">置信度: ${pred.score}%</div>
+                        <div class="number-ball">${String(num).padStart(2, '0')}</div>
+                        <div style="color: #60a5fa; font-size: 0.8em; margin-top: 5px;">置信度: ${score}%</div>
                     </div>
                 `;
             });
             html += '</div>';
-            document.getElementById('lucky-number').innerHTML = html;
+            setHTML('lucky-number', html);
         }
 
         function renderSingleDouble(data) {
-            if (data.error) {
-                document.getElementById('single-double').innerHTML = 
-                    `<div class="info-box error">${data.error}</div>`;
+            if (!data || data.error) {
+                setHTML('single-double', 
+                    `<div class="info-box error">${escapeHtml(data ? data.error : '暂无数据')}</div>`);
                 return;
             }
 
+            const predText = data.prediction === 'ODD' ? '单数' : '双数';
             const html = `
                 <div class="prediction-row success">
                     <div style="font-size: 1.2em; margin-bottom: 10px;">
-                        预测: <span class="highlight">${data.prediction === 'ODD' ? '单数 🔵' : '双数 ⚪'}</span>
+                        预测: <span class="highlight">${escapeHtml(predText)}</span>
                     </div>
                     <table>
-                        <tr><td>置信度</td><td style="color: #60a5fa;">${data.confidence}%</td></tr>
-                        <tr><td>单数比例</td><td style="color: #60a5fa;">${data.oddRatio}%</td></tr>
-                        <tr><td>双数比例</td><td style="color: #60a5fa;">${data.evenRatio}%</td></tr>
-                        <tr><td>最大连续</td><td style="color: #60a5fa;">${data.maxConsecutiveOdd}</td></tr>
+                        <tr><td>置信度</td><td style="color: #60a5fa;">${escapeHtml(data.confidence)}%</td></tr>
+                        <tr><td>单数比例</td><td style="color: #60a5fa;">${escapeHtml(data.oddRatio)}%</td></tr>
+                        <tr><td>双数比例</td><td style="color: #60a5fa;">${escapeHtml(data.evenRatio)}%</td></tr>
+                        <tr><td>最大连续</td><td style="color: #60a5fa;">${escapeHtml(data.maxConsecutiveOdd)}</td></tr>
                     </table>
                 </div>
             `;
-            document.getElementById('single-double').innerHTML = html;
+            setHTML('single-double', html);
         }
 
         function renderBigSmall(data) {
-            if (data.error) {
-                document.getElementById('big-small').innerHTML = 
-                    `<div class="info-box error">${data.error}</div>`;
+            if (!data || data.error) {
+                setHTML('big-small', 
+                    `<div class="info-box error">${escapeHtml(data ? data.error : '暂无数据')}</div>`);
                 return;
             }
 
+            const predText = data.prediction === 'BIG' ? '大' : '小';
             const html = `
                 <div class="prediction-row success">
                     <div style="font-size: 1.2em; margin-bottom: 10px;">
-                        预测: <span class="highlight">${data.prediction === 'BIG' ? '大 📈' : '小 📉'}</span>
+                        预测: <span class="highlight">${escapeHtml(predText)}</span>
                     </div>
                     <table>
-                        <tr><td>置信度</td><td style="color: #60a5fa;">${data.confidence}%</td></tr>
-                        <tr><td>大数比例</td><td style="color: #60a5fa;">${data.bigRatio}%</td></tr>
-                        <tr><td>小数比例</td><td style="color: #60a5fa;">${data.smallRatio}%</td></tr>
+                        <tr><td>置信度</td><td style="color: #60a5fa;">${escapeHtml(data.confidence)}%</td></tr>
+                        <tr><td>大数比例</td><td style="color: #60a5fa;">${escapeHtml(data.bigRatio)}%</td></tr>
+                        <tr><td>小数比例</td><td style="color: #60a5fa;">${escapeHtml(data.smallRatio)}%</td></tr>
                     </table>
                 </div>
             `;
-            document.getElementById('big-small').innerHTML = html;
+            setHTML('big-small', html);
         }
 
         function renderDoubleGroup(data) {
-            if (data.length === 0) {
-                document.getElementById('double-group').innerHTML = 
-                    '<div class="info-box error">暂无数据</div>';
+            if (!Array.isArray(data) || data.length === 0) {
+                setHTML('double-group', '<div class="info-box error">暂无数据</div>');
                 return;
             }
 
@@ -494,22 +604,24 @@
             };
 
             data.forEach(pred => {
+                const label = escapeHtml(labels[pred.group] || pred.group);
+                const freq = escapeHtml(pred.frequency);
+                const ratio = escapeHtml(pred.ratio);
                 html += `
                     <tr>
-                        <td>${labels[pred.group]}</td>
-                        <td>${pred.frequency}</td>
-                        <td style="color: #60a5fa;">${pred.ratio}%</td>
+                        <td>${label}</td>
+                        <td>${freq}</td>
+                        <td style="color: #60a5fa;">${ratio}%</td>
                     </tr>
                 `;
             });
             html += '</table>';
-            document.getElementById('double-group').innerHTML = html;
+            setHTML('double-group', html);
         }
 
         function renderKillGroup(data) {
-            if (data.length === 0) {
-                document.getElementById('kill-group').innerHTML = 
-                    '<div class="info-box error">暂无数据</div>';
+            if (!Array.isArray(data) || data.length === 0) {
+                setHTML('kill-group', '<div class="info-box error">暂无数据</div>');
                 return;
             }
 
@@ -522,16 +634,19 @@
             };
 
             data.forEach(rec => {
+                const label = escapeHtml(labels[rec.group] || rec.group);
+                const missing = escapeHtml(rec.missingPeriods);
+                const confidence = escapeHtml(rec.confidence);
                 html += `
                     <tr>
-                        <td>${labels[rec.group]}</td>
-                        <td>${rec.missingPeriods}</td>
-                        <td style="color: #60a5fa;">${rec.confidence}%</td>
+                        <td>${label}</td>
+                        <td>${missing}</td>
+                        <td style="color: #60a5fa;">${confidence}%</td>
                     </tr>
                 `;
             });
             html += '</table>';
-            document.getElementById('kill-group').innerHTML = html;
+            setHTML('kill-group', html);
         }
 
         async function renderStats() {
@@ -541,18 +656,18 @@
             const html = `
                 <div class="prediction-row">
                     <table>
-                        <tr><td>运行时间</td><td style="color: #60a5fa;">${stats.uptime}</td></tr>
-                        <tr><td>网络状态</td><td style="color: #60a5fa;">${stats.isOnline ? '在线 ✓' : '离线'}</td></tr>
+                        <tr><td>运行时间</td><td style="color: #60a5fa;">${escapeHtml(stats.uptime)}</td></tr>
+                        <tr><td>网络状态</td><td style="color: #60a5fa;">${stats.isOnline ? '在线' : '离线'}</td></tr>
                         <tr><td>数据库</td><td style="color: #60a5fa;">
-                            ${stats.dbStats.draws}条开奖 | 
-                            ${stats.dbStats.predictions}条预测 | 
-                            ${stats.dbStats.cache}条缓存
+                            ${escapeHtml(stats.dbStats.draws)}条开奖 | 
+                            ${escapeHtml(stats.dbStats.predictions)}条预测 | 
+                            ${escapeHtml(stats.dbStats.cache)}条缓存
                         </td></tr>
-                        <tr><td>已加载预测</td><td style="color: #60a5fa;">${stats.predictions.join(', ') || '无'}</td></tr>
+                        <tr><td>已加载预测</td><td style="color: #60a5fa;">${escapeHtml(stats.predictions.join(', ') || '无')}</td></tr>
                     </table>
                 </div>
             `;
-            document.getElementById('system-stats').innerHTML = html;
+            setHTML('system-stats', html);
             document.getElementById('db-size').textContent = 
                 `${stats.dbStats.draws + stats.dbStats.predictions}条数据`;
             document.getElementById('prediction-count').textContent = `${stats.predictions.length}个`;
@@ -563,23 +678,25 @@
             const draws = await app.db.getRecentDraws(20);
 
             if (draws.length === 0) {
-                document.getElementById('history').innerHTML = 
-                    '<div class="info-box">暂无历史记录</div>';
+                setHTML('history', '<div class="info-box">暂无历史记录</div>');
                 return;
             }
 
             let html = '<table><tr><th>期号</th><th>号码</th><th>时间</th></tr>';
             draws.forEach(draw => {
+                const period = escapeHtml(draw.period);
+                const num = String(escapeHtml(draw.number)).padStart(2, '0');
+                const time = escapeHtml(new Date(draw.timestamp).toLocaleString('zh-CN'));
                 html += `
                     <tr>
-                        <td>${draw.period}</td>
-                        <td><span class="number-ball">${String(draw.number).padStart(2, '0')}</span></td>
-                        <td style="font-size: 0.9em;">${new Date(draw.timestamp).toLocaleString('zh-CN')}</td>
+                        <td>${period}</td>
+                        <td><span class="number-ball">${num}</span></td>
+                        <td style="font-size: 0.9em;">${time}</td>
                     </tr>
                 `;
             });
             html += '</table>';
-            document.getElementById('history').innerHTML = html;
+            setHTML('history', html);
         }
 
         // 监听预测结果
@@ -596,7 +713,7 @@
             await renderHistory();
         });
 
-        // 修改app方法以触发事件
+        // 重写 app.getComprehensivePrediction 以触发事件
         const originalGetPrediction = PC28FrontendEliteApp.prototype.getComprehensivePrediction;
         PC28FrontendEliteApp.prototype.getComprehensivePrediction = async function() {
             const result = await originalGetPrediction.call(this);
@@ -604,30 +721,31 @@
                 window.dispatchEvent(new CustomEvent('prediction-update', {
                     detail: { predictions: result.data }
                 }));
-                showMessage('✅ 预测完成！', 'success');
+                showMessage('预测完成！', 'success');
             } else {
-                showMessage(`❌ ${result.msg}`, 'error');
+                showMessage(result.msg, 'error');
             }
             return result;
         };
 
-        // 刷新数据后更新历史
+        // 重写 fetchDrawData 以触发历史更新
         const originalFetch = PC28FrontendEliteApp.prototype.fetchDrawData;
         PC28FrontendEliteApp.prototype.fetchDrawData = async function() {
-            showMessage('📥 正在刷新数据...', 'info');
+            showMessage('正在刷新数据...', 'info');
             const result = await originalFetch.call(this);
-            if (result.code === 0) {
-                showMessage('✅ 数据刷新成功！' + (result.offline ? ' (离线模式)' : ''), 'success');
+            if (result.code === 0 && result.data) {
+                showMessage('数据刷新成功！' + (result.offline ? ' (离线模式)' : ''), 'success');
                 await renderHistory();
-            } else {
-                showMessage(`⚠️ ${result.msg}`, 'error');
+            } else if (result.code !== 0) {
+                showMessage(result.msg, 'error');
             }
             return result;
         };
 
         function clearUI() {
-            document.querySelectorAll('[id$="-number"], [id$="-double"], [id$="-small"], [id$="-group"]').forEach(el => {
-                el.innerHTML = '<div class="loading"><p>等待数据...</p></div>';
+            const ids = ['lucky-number', 'single-double', 'big-small', 'double-group', 'kill-group', 'system-stats'];
+            ids.forEach(id => {
+                setHTML(id, '<div class="loading"><p>等待数据...</p></div>');
             });
         }
     </script>
