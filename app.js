@@ -1,5 +1,6 @@
 // ============================================================
 // 第四部分：主应用 - app.js (前端核心应用)
+// 优化：修复Worker竞态、批量写入、内存泄漏、完善导入/清空
 // ============================================================
 
 class PC28FrontendEliteApp {
@@ -10,6 +11,9 @@ class PC28FrontendEliteApp {
     this.predictions = {};
     this.stats = {};
     this.initializeTime = Date.now();
+    this._refreshIntervalId = null;
+    this._isFetching = false;
+    this._workerMessageCounter = 0;
   }
 
   /**
@@ -78,53 +82,62 @@ class PC28FrontendEliteApp {
   }
 
   /**
-   * 获取实时开奖数据
+   * 获取实时开奖数据（带防抖，防止并发请求）
    */
   async fetchDrawData() {
+    // 防抖：如果正在获取中，跳过本次请求
+    if (this._isFetching) {
+      console.log('⏳ 数据获取进行中，跳过重复请求');
+      return { code: 0, msg: '请求被跳过（防抖）' };
+    }
+
+    this._isFetching = true;
     try {
       // 优先使用缓存（如果在线，会自动更新）
       const cachedData = await this.db.getCache('latest-draws');
-      
+
       if (this.isOnline) {
         // 在线模式：从API获取最新数据
         const response = await this._fetchWithRetry('https://pc28.help/api/kj.json?nbr=100', 3);
-        
-        if (response.ok) {
+
+        if (response && response.ok) {
           const data = await response.json();
           const processed = this._processDrawData(data);
-          
-          // 保存到数据库
-          for (const draw of processed) {
-            await this.db.saveDraw(draw);
+
+          if (processed.length > 0) {
+            // 批量保存到数据库（单事务，性能优化）
+            await this.db.batchSaveDraws(processed);
+
+            // 更新缓存
+            await this.db.setCache('latest-draws', processed, 300000); // 5分钟有效期
+
+            // 更新Worker
+            await this._updateWorkerHistory(processed);
+
+            return { code: 0, data: processed };
           }
-          
-          // 更新缓存
-          await this.db.setCache('latest-draws', processed, 300000); // 5分钟有效期
-          
-          // 更新Worker
-          await this._updateWorkerHistory(processed);
-          
-          return { code: 0, data: processed };
         }
       }
-      
+
       // 离线或网络失败：使用缓存数据
       if (cachedData) {
         console.log('📦 使用缓存数据 (离线模式)');
         return { code: 0, data: cachedData, offline: true };
       }
-      
+
       // 都失败：从IndexedDB获取历史数据
       const historicalData = await this.db.getRecentDraws(50);
       if (historicalData.length > 0) {
         console.log('📊 使用历史数据 (应急模式)');
         return { code: 0, data: historicalData, fallback: true };
       }
-      
+
       return { code: 1, msg: '无可用数据' };
     } catch (err) {
       console.error('❌ 获取数据失败:', err);
       return { code: 1, msg: err.message };
+    } finally {
+      this._isFetching = false;
     }
   }
 
@@ -136,20 +149,21 @@ class PC28FrontendEliteApp {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
-        
+
         const response = await fetch(url, {
           signal: controller.signal,
           headers: { 'Content-Type': 'application/json' }
         });
-        
+
         clearTimeout(timeoutId);
         return response;
       } catch (err) {
         console.warn(`⚠️ 重试 ${i + 1}/${maxRetries} 失败:`, err.message);
-        if (i === maxRetries - 1) throw err;
+        if (i === maxRetries - 1) return null;
         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // 指数退避
       }
     }
+    return null;
   }
 
   /**
@@ -172,13 +186,16 @@ class PC28FrontendEliteApp {
           }
         }
 
+        // 确保number是有效整数
+        if (isNaN(number) || number < 0 || number >= 28) return null;
+
         return {
-          period: item.nbr || idx,
+          period: String(item.nbr || idx),
           number: number,
           time: item.time || new Date().toLocaleString('zh-CN'),
           timestamp: Date.now()
         };
-      }).filter(item => item.number >= 0 && item.number < 28);
+      }).filter(item => item !== null);
     } catch (err) {
       console.error('数据处理错误:', err);
       return [];
@@ -293,18 +310,37 @@ class PC28FrontendEliteApp {
   }
 
   /**
-   * Worker通信
+   * Worker通信（修复竞态条件：校验消息ID + 超时清理）
    */
   _postToWorker(message, callback) {
-    if (!this.worker) return;
+    if (!this.worker) {
+      if (callback) callback({ error: 'Worker未初始化' });
+      return;
+    }
 
-    const messageId = `msg_${Date.now()}`;
+    const messageId = `msg_${++this._workerMessageCounter}_${Date.now()}`;
+    let settled = false;
+
     const handler = (event) => {
+      // 仅处理匹配当前消息ID的响应
+      if (event.data.id !== messageId) return;
+
+      settled = true;
       if (callback) {
         callback(event.data.result || event.data);
       }
       this.worker.removeEventListener('message', handler);
+      clearTimeout(timeoutId);
     };
+
+    // 超时保护：10秒后自动清理监听器，防止内存泄漏
+    const timeoutId = setTimeout(() => {
+      if (!settled) {
+        console.warn(`⚠️ Worker消息 ${messageId} 超时未响应`);
+        this.worker.removeEventListener('message', handler);
+        if (callback) callback({ error: '请求超时' });
+      }
+    }, 10000);
 
     this.worker.addEventListener('message', handler);
     this.worker.postMessage({ ...message, id: messageId });
@@ -348,25 +384,38 @@ class PC28FrontendEliteApp {
   }
 
   /**
-   * 导入数据
+   * 导入数据（从备份文件恢复）
    */
   async importData(file) {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      // 导入逻辑...
-      return { code: 0, msg: '导入成功' };
+      const results = await this.db.importData(data);
+
+      // 导入后刷新Worker数据
+      const draws = await this.db.getRecentDraws(100);
+      if (draws.length > 0) {
+        await this._updateWorkerHistory(draws);
+      }
+
+      const total = Object.values(results).reduce((a, b) => a + b, 0);
+      return { code: 0, msg: `导入成功，共 ${total} 条数据`, details: results };
     } catch (err) {
       return { code: 1, msg: err.message };
     }
   }
 
   /**
-   * 自动刷新
+   * 自动刷新（存储intervalId以便清理）
    */
   _setupAutoRefresh() {
+    // 清理旧的定时器（防止重复设置）
+    if (this._refreshIntervalId) {
+      clearInterval(this._refreshIntervalId);
+    }
+
     // 每4.5分钟自动刷新一次
-    setInterval(() => {
+    this._refreshIntervalId = setInterval(() => {
       if (this.isOnline) {
         console.log('🔄 自动刷新数据...');
         this.fetchDrawData().catch(err => console.error(err));
@@ -402,13 +451,29 @@ class PC28FrontendEliteApp {
   async clearAllData() {
     try {
       // 清空数据库
-      // await this.db.clearAll();
+      await this.db.clearAll();
       // 清空Service Worker缓存
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map(name => caches.delete(name)));
+      // 重置预测状态
+      this.predictions = {};
       return { code: 0, msg: '所有数据已清空' };
     } catch (err) {
       return { code: 1, msg: err.message };
+    }
+  }
+
+  /**
+   * 销毁应用，清理资源
+   */
+  destroy() {
+    if (this._refreshIntervalId) {
+      clearInterval(this._refreshIntervalId);
+      this._refreshIntervalId = null;
+    }
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
     }
   }
 }
