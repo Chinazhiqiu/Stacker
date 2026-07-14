@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC28 前端精英系统 v4.0 - 完全离线版</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #e5e7eb;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1em;
+        }
+
+        .status-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .status-item {
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-label {
+            color: #9ca3af;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 1.3em;
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-indicator.online {
+            background: #4ade80;
+            box-shadow: 0 0 10px #4ade80;
+        }
+
+        .status-indicator.offline {
+            background: #ef4444;
+            box-shadow: 0 0 10px #ef4444;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: rgba(102, 126, 234, 0.6);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+            color: #60a5fa;
+        }
+
+        .card-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .number-ball {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            font-weight: bold;
+            font-size: 1.2em;
+            margin: 5px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .prediction-row {
+            background: rgba(50, 60, 90, 0.5);
+            padding: 12px;
+            border-radius: 6px;
+            margin: 8px 0;
+            border-left: 3px solid #667eea;
+        }
+
+        button {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            font-size: 0.95em;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #9ca3af;
+        }
+
+        .spinner {
+            border: 3px solid rgba(102, 126, 234, 0.2);
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #93c5fd;
+            margin: 10px 0;
+        }
+
+        .success {
+            background: rgba(34, 197, 94, 0.1);
+            border-left-color: #22c55e;
+            color: #4ade80;
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border-left-color: #ef4444;
+            color: #fca5a5;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        th {
+            background: rgba(102, 126, 234, 0.1);
+            font-weight: bold;
+        }
+
+        tbody tr:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .highlight {
+            color: #60a5fa;
+            font-weight: bold;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 PC28 前端精英系统 v4.0</h1>
+            <p class="subtitle">完全离线版 • IndexedDB持久化 • Web Worker并行计算 • Service Worker离线支持</p>
+        </header>
+
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-label">
+                    <span class="status-indicator" id="online-indicator"></span>
+                    网络状态
+                </div>
+                <div class="status-value" id="online-status">检测中...</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">📊 系统运行时间</div>
+                <div class="status-value" id="uptime">0秒</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">💾 数据库大小</div>
+                <div class="status-value" id="db-size">计算中...</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">🔄 预测模式</div>
+                <div class="status-value" id="prediction-count">0个</div>
+            </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="card" style="margin-bottom: 30px;">
+            <div class="card-title">⚙️ 系统控制</div>
+            <div class="button-group">
+                <button onclick="app.initialize()">🚀 初始化系统</button>
+                <button onclick="app.fetchDrawData()">📥 刷新数据</button>
+                <button onclick="app.getComprehensivePrediction()">🎯 获取预测</button>
+                <button onclick="app.getStats()">📈 查看统计</button>
+                <button onclick="app.exportData()">💾 导出备份</button>
+                <button onclick="clearUI()">🧹 清空界面</button>
+            </div>
+            <div id="system-message" style="margin-top: 15px;"></div>
+        </div>
+
+        <!-- 预测结果 -->
+        <div class="grid">
+            <!-- 特码预测 -->
+            <div class="card">
+                <div class="card-title">🎲 特码预测</div>
+                <div id="lucky-number" class="loading">
+                    <div class="spinner"></div>
+                    <p>等待数据...</p>
+                </div>
+            </div>
+
+            <!-- 单双预测 -->
+            <div class="card">
+                <div class="card-title">👯 单双预测</div>
+                <div id="single-double" class="loading">
+                    <div class="spinner"></div>
+                    <p>等待数据...</p>
+                </div>
+            </div>
+
+            <!-- 大小预测 -->
+            <div class="card">
+                <div class="card-title">📏 大小预测</div>
+                <div id="big-small" class="loading">
+                    <div class="spinner"></div>
+                    <p>等待数据...</p>
+                </div>
+            </div>
+
+            <!-- 双组预测 -->
+            <div class="card">
+                <div class="card-title">🎪 双组预测</div>
+                <div id="double-group" class="loading">
+                    <div class="spinner"></div>
+                    <p>等待数据...</p>
+                </div>
+            </div>
+
+            <!-- 杀组预测 -->
+            <div class="card">
+                <div class="card-title">⚔️ 杀组预测</div>
+                <div id="kill-group" class="loading">
+                    <div class="spinner"></div>
+                    <p>等待数据...</p>
+                </div>
+            </div>
+
+            <!-- 数据统计 -->
+            <div class="card">
+                <div class="card-title">📊 系统统计</div>
+                <div id="system-stats" class="loading">
+                    <div class="spinner"></div>
+                    <p>计算中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 历史记录 -->
+        <div class="card">
+            <div class="card-title">📋 最近开奖记录</div>
+            <div id="history" class="loading">
+                <p>加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入脚本 -->
+    <script src="/database-manager.js"></script>
+    <script src="/app.js"></script>
+    <script>
+        let app = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🌟 页面加载完成');
+            
+            app = new PC28FrontendEliteApp();
+            
+            // 显示网络状态
+            updateOnlineStatus();
+            window.addEventListener('online', updateOnlineStatus);
+            window.addEventListener('offline', updateOnlineStatus);
+
+            // 更新运行时间
+            setInterval(() => {
+                if (app && app.initializeTime) {
+                    const uptime = (Date.now() - app.initializeTime) / 1000;
+                    document.getElementById('uptime').textContent = 
+                        uptime < 60 ? `${uptime.toFixed(0)}秒` : `${(uptime / 60).toFixed(1)}分`;
+                }
+            }, 1000);
+
+            // 自动初始化
+            showMessage('💡 准备就绪，点击"初始化系统"开始', 'info');
+        });
+
+        function updateOnlineStatus() {
+            const indicator = document.getElementById('online-indicator');
+            const status = document.getElementById('online-status');
+            
+            if (navigator.onLine) {
+                indicator.className = 'status-indicator online';
+                status.textContent = '在线 ✓';
+                status.style.color = '#4ade80';
+            } else {
+                indicator.className = 'status-indicator offline';
+                status.textContent = '离线 (本地模式)';
+                status.style.color = '#ef4444';
+            }
+        }
+
+        function showMessage(text, type = 'info') {
+            const container = document.getElementById('system-message');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            container.innerHTML = `<div class="info-box ${className}">${text}</div>`;
+        }
+
+        function renderLuckyNumber(data) {
+            if (data.error) {
+                document.getElementById('lucky-number').innerHTML = 
+                    `<div class="info-box error">${data.error}</div>`;
+                return;
+            }
+
+            let html = '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+            data.slice(0, 5).forEach(pred => {
+                html += `
+                    <div style="background: rgba(102, 126, 234, 0.2); padding: 12px; border-radius: 6px; text-align: center;">
+                        <div class="number-ball">${String(pred.number).padStart(2, '0')}</div>
+                        <div style="color: #60a5fa; font-size: 0.8em; margin-top: 5px;">置信度: ${pred.score}%</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('lucky-number').innerHTML = html;
+        }
+
+        function renderSingleDouble(data) {
+            if (data.error) {
+                document.getElementById('single-double').innerHTML = 
+                    `<div class="info-box error">${data.error}</div>`;
+                return;
+            }
+
+            const html = `
+                <div class="prediction-row success">
+                    <div style="font-size: 1.2em; margin-bottom: 10px;">
+                        预测: <span class="highlight">${data.prediction === 'ODD' ? '单数 🔵' : '双数 ⚪'}</span>
+                    </div>
+                    <table>
+                        <tr><td>置信度</td><td style="color: #60a5fa;">${data.confidence}%</td></tr>
+                        <tr><td>单数比例</td><td style="color: #60a5fa;">${data.oddRatio}%</td></tr>
+                        <tr><td>双数比例</td><td style="color: #60a5fa;">${data.evenRatio}%</td></tr>
+                        <tr><td>最大连续</td><td style="color: #60a5fa;">${data.maxConsecutiveOdd}</td></tr>
+                    </table>
+                </div>
+            `;
+            document.getElementById('single-double').innerHTML = html;
+        }
+
+        function renderBigSmall(data) {
+            if (data.error) {
+                document.getElementById('big-small').innerHTML = 
+                    `<div class="info-box error">${data.error}</div>`;
+                return;
+            }
+
+            const html = `
+                <div class="prediction-row success">
+                    <div style="font-size: 1.2em; margin-bottom: 10px;">
+                        预测: <span class="highlight">${data.prediction === 'BIG' ? '大 📈' : '小 📉'}</span>
+                    </div>
+                    <table>
+                        <tr><td>置信度</td><td style="color: #60a5fa;">${data.confidence}%</td></tr>
+                        <tr><td>大数比例</td><td style="color: #60a5fa;">${data.bigRatio}%</td></tr>
+                        <tr><td>小数比例</td><td style="color: #60a5fa;">${data.smallRatio}%</td></tr>
+                    </table>
+                </div>
+            `;
+            document.getElementById('big-small').innerHTML = html;
+        }
+
+        function renderDoubleGroup(data) {
+            if (data.length === 0) {
+                document.getElementById('double-group').innerHTML = 
+                    '<div class="info-box error">暂无数据</div>';
+                return;
+            }
+
+            let html = '<table><tr><th>组合</th><th>频次</th><th>比例</th></tr>';
+            const labels = {
+                'ODD_SMALL': '单小 (1-13奇)',
+                'ODD_BIG': '单大 (15-27奇)',
+                'EVEN_SMALL': '双小 (0-12偶)',
+                'EVEN_BIG': '双大 (14-26偶)'
+            };
+
+            data.forEach(pred => {
+                html += `
+                    <tr>
+                        <td>${labels[pred.group]}</td>
+                        <td>${pred.frequency}</td>
+                        <td style="color: #60a5fa;">${pred.ratio}%</td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            document.getElementById('double-group').innerHTML = html;
+        }
+
+        function renderKillGroup(data) {
+            if (data.length === 0) {
+                document.getElementById('kill-group').innerHTML = 
+                    '<div class="info-box error">暂无数据</div>';
+                return;
+            }
+
+            let html = '<table><tr><th>杀组类型</th><th>未出现期数</th><th>建议置信度</th></tr>';
+            const labels = {
+                'KILL_ODD': '杀单组',
+                'KILL_EVEN': '杀双组',
+                'KILL_BIG': '杀大组',
+                'KILL_SMALL': '杀小组'
+            };
+
+            data.forEach(rec => {
+                html += `
+                    <tr>
+                        <td>${labels[rec.group]}</td>
+                        <td>${rec.missingPeriods}</td>
+                        <td style="color: #60a5fa;">${rec.confidence}%</td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            document.getElementById('kill-group').innerHTML = html;
+        }
+
+        async function renderStats() {
+            if (!app) return;
+            const stats = await app.getStats();
+
+            const html = `
+                <div class="prediction-row">
+                    <table>
+                        <tr><td>运行时间</td><td style="color: #60a5fa;">${stats.uptime}</td></tr>
+                        <tr><td>网络状态</td><td style="color: #60a5fa;">${stats.isOnline ? '在线 ✓' : '离线'}</td></tr>
+                        <tr><td>数据库</td><td style="color: #60a5fa;">
+                            ${stats.dbStats.draws}条开奖 | 
+                            ${stats.dbStats.predictions}条预测 | 
+                            ${stats.dbStats.cache}条缓存
+                        </td></tr>
+                        <tr><td>已加载预测</td><td style="color: #60a5fa;">${stats.predictions.join(', ') || '无'}</td></tr>
+                    </table>
+                </div>
+            `;
+            document.getElementById('system-stats').innerHTML = html;
+            document.getElementById('db-size').textContent = 
+                `${stats.dbStats.draws + stats.dbStats.predictions}条数据`;
+            document.getElementById('prediction-count').textContent = `${stats.predictions.length}个`;
+        }
+
+        async function renderHistory() {
+            if (!app) return;
+            const draws = await app.db.getRecentDraws(20);
+
+            if (draws.length === 0) {
+                document.getElementById('history').innerHTML = 
+                    '<div class="info-box">暂无历史记录</div>';
+                return;
+            }
+
+            let html = '<table><tr><th>期号</th><th>号码</th><th>时间</th></tr>';
+            draws.forEach(draw => {
+                html += `
+                    <tr>
+                        <td>${draw.period}</td>
+                        <td><span class="number-ball">${String(draw.number).padStart(2, '0')}</span></td>
+                        <td style="font-size: 0.9em;">${new Date(draw.timestamp).toLocaleString('zh-CN')}</td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            document.getElementById('history').innerHTML = html;
+        }
+
+        // 监听预测结果
+        window.addEventListener('prediction-update', async (event) => {
+            const { predictions } = event.detail || {};
+            if (predictions) {
+                renderLuckyNumber(predictions.luckyNumber || []);
+                renderSingleDouble(predictions.singleDouble || {});
+                renderBigSmall(predictions.bigSmall || {});
+                renderDoubleGroup(predictions.doubleGroup || []);
+                renderKillGroup(predictions.killGroup || []);
+            }
+            await renderStats();
+            await renderHistory();
+        });
+
+        // 修改app方法以触发事件
+        const originalGetPrediction = PC28FrontendEliteApp.prototype.getComprehensivePrediction;
+        PC28FrontendEliteApp.prototype.getComprehensivePrediction = async function() {
+            const result = await originalGetPrediction.call(this);
+            if (result.code === 0) {
+                window.dispatchEvent(new CustomEvent('prediction-update', {
+                    detail: { predictions: result.data }
+                }));
+                showMessage('✅ 预测完成！', 'success');
+            } else {
+                showMessage(`❌ ${result.msg}`, 'error');
+            }
+            return result;
+        };
+
+        // 刷新数据后更新历史
+        const originalFetch = PC28FrontendEliteApp.prototype.fetchDrawData;
+        PC28FrontendEliteApp.prototype.fetchDrawData = async function() {
+            showMessage('📥 正在刷新数据...', 'info');
+            const result = await originalFetch.call(this);
+            if (result.code === 0) {
+                showMessage('✅ 数据刷新成功！' + (result.offline ? ' (离线模式)' : ''), 'success');
+                await renderHistory();
+            } else {
+                showMessage(`⚠️ ${result.msg}`, 'error');
+            }
+            return result;
+        };
+
+        function clearUI() {
+            document.querySelectorAll('[id$="-number"], [id$="-double"], [id$="-small"], [id$="-group"]').forEach(el => {
+                el.innerHTML = '<div class="loading"><p>等待数据...</p></div>';
+            });
+        }
+    </script>
+</body>
+</html>
