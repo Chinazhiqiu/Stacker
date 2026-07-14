@@ -1,12 +1,12 @@
 // ============================================================
 // 第三部分：Service Worker - service-worker.js (离线支持)
+// 优化：移除不存在的styles.css、升级缓存版本
 // ============================================================
 
-const CACHE_NAME = 'pc28-elite-v1';
+const CACHE_NAME = 'pc28-elite-v2';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
-  '/styles.css',
   '/app.js',
   '/database-manager.js',
   '/worker.js'
@@ -18,7 +18,10 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('[Service Worker] 缓存资源');
-      return cache.addAll(URLS_TO_CACHE);
+      // 使用 addAll 的容错版本：逐个缓存，跳过失败的资源
+      return Promise.allSettled(
+        URLS_TO_CACHE.map(url => cache.add(url))
+      );
     })
   );
   self.skipWaiting();
@@ -71,7 +74,7 @@ self.addEventListener('fetch', event => {
           });
         })
     );
-  } 
+  }
   // 静态资源 - 缓存优先
   else {
     event.respondWith(
