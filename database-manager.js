@@ -3,7 +3,7 @@
 // ============================================================
 
 class DatabaseManager {
-  constructor(dbName = 'pc28-elite', version = 1) {
+  constructor(dbName = 'pc28-elite', version = 2) {
     this.dbName = dbName;
     this.version = version;
     this.db = null;
@@ -27,10 +27,11 @@ class DatabaseManager {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
+        const oldVersion = event.oldVersion;
 
         // 创建存储空间
         const stores = {
-          'draws': { keyPath: 'id', autoIncrement: true },
+          'draws': { keyPath: 'period', autoIncrement: false },
           'predictions': { keyPath: 'id', autoIncrement: true },
           'cache': { keyPath: 'key' },
           'syncQueue': { keyPath: 'id', autoIncrement: true },
@@ -51,6 +52,22 @@ class DatabaseManager {
             }
           }
         });
+
+        // v2 升级：如果 draws store 存在但 keyPath 不对，需要重建
+        if (oldVersion < 2 && db.objectStoreNames.contains('draws')) {
+          // 旧版本用 id 作 keyPath，新版本用 period 去重
+          // 注意：IndexedDB 不支持修改已有 store 的 keyPath
+          // 如果需要从 v1 升级，需要删除并重建
+          try {
+            db.deleteObjectStore('draws');
+            const store = db.createObjectStore('draws', { keyPath: 'period' });
+            store.createIndex('period', 'period', { unique: false });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+            console.log('✅ draws store 已升级（keyPath: period）');
+          } catch (e) {
+            console.warn('⚠️ draws store 升级失败:', e);
+          }
+        }
 
         console.log('✅ 数据库架构创建成功');
       };
@@ -79,18 +96,38 @@ class DatabaseManager {
   }
 
   /**
-   * 保存开奖数据
+   * 保存开奖数据（使用 period 作为主键，自动去重）
    */
   async saveDraw(draw) {
     return new Promise((resolve, reject) => {
       this.transaction('draws', 'readwrite', (store) => {
         const request = store.put({
           ...draw,
-          id: `${draw.period}-${Date.now()}`,
-          timestamp: Date.now()
+          timestamp: draw.timestamp || Date.now()
         });
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
+      }).catch(reject);
+    });
+  }
+
+  /**
+   * 批量保存开奖数据（单事务，性能优化）
+   */
+  async batchSaveDraws(draws) {
+    return new Promise((resolve, reject) => {
+      let savedCount = 0;
+      this.transaction('draws', 'readwrite', (store) => {
+        draws.forEach(draw => {
+          const request = store.put({
+            ...draw,
+            timestamp: draw.timestamp || Date.now()
+          });
+          request.onsuccess = () => { savedCount++; };
+        });
+      }).then(() => {
+        console.log(`✅ 批量保存 ${savedCount} 条开奖数据`);
+        resolve(savedCount);
       }).catch(reject);
     });
   }
@@ -140,7 +177,6 @@ class DatabaseManager {
    */
   async getAllPredictions() {
     return new Promise((resolve, reject) => {
-      const results = [];
       this.transaction('predictions', 'readonly', (store) => {
         const request = store.getAll();
         request.onsuccess = () => resolve(request.result);
@@ -208,7 +244,6 @@ class DatabaseManager {
    */
   async getPendingSyncOperations() {
     return new Promise((resolve, reject) => {
-      const results = [];
       this.transaction('syncQueue', 'readonly', (store) => {
         const request = store.getAll();
         request.onsuccess = () => {
@@ -281,5 +316,58 @@ class DatabaseManager {
     }
 
     return data;
+  }
+
+  /**
+   * 导入数据（从备份文件恢复）
+   */
+  async importData(data) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('无效的数据格式');
+    }
+
+    const results = {};
+    const importableStores = ['draws', 'predictions', 'statistics'];
+
+    for (const storeName of importableStores) {
+      if (!Array.isArray(data[storeName])) continue;
+
+      let count = 0;
+      await new Promise((resolve, reject) => {
+        this.transaction(storeName, 'readwrite', (store) => {
+          data[storeName].forEach(item => {
+            const request = store.put(item);
+            request.onsuccess = () => { count++; };
+            request.onerror = () => console.warn(`⚠️ 导入 ${storeName} 单条数据失败`);
+          });
+        }).then(() => {
+          results[storeName] = count;
+          resolve();
+        }).catch(reject);
+      });
+    }
+
+    console.log('✅ 数据导入完成:', results);
+    return results;
+  }
+
+  /**
+   * 清空所有数据
+   */
+  async clearAll() {
+    const stores = ['draws', 'predictions', 'cache', 'syncQueue', 'statistics'];
+
+    for (const storeName of stores) {
+      await new Promise((resolve, reject) => {
+        this.transaction(storeName, 'readwrite', (store) => {
+          const request = store.clear();
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        }).catch(reject);
+      });
+    }
+
+    console.log('✅ 所有数据已清空');
+    return true;
   }
 }
