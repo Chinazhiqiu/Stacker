@@ -131,7 +131,7 @@ class WorkerPredictionEngine {
     };
   }
 
-  // 双组预测
+  // 双组预测（含最优组合推荐）
   predictDoubleGroup() {
     if (this.history.length < 10) return { error: '数据不足' };
 
@@ -154,13 +154,50 @@ class WorkerPredictionEngine {
       }
     });
 
-    return Object.entries(groups)
-      .sort((a, b) => b[1] - a[1])
+    const total = recent.length;
+    const groupList = Object.entries(groups)
       .map(([group, count]) => ({
         group,
         frequency: count,
-        ratio: (count / recent.length * 100).toFixed(2)
-      }));
+        ratio: (count / total * 100).toFixed(2)
+      }))
+      .sort((a, b) => b.frequency - a.frequency);
+
+    // 计算所有 C(4,2)=6 种两两组合，选出命中率最高的
+    const labels = {
+      'ODD_SMALL': '单小',
+      'ODD_BIG': '单大',
+      'EVEN_SMALL': '双小',
+      'EVEN_BIG': '双大'
+    };
+
+    let bestCombo = null;
+    let bestHitRate = 0;
+
+    for (let i = 0; i < groupList.length; i++) {
+      for (let j = i + 1; j < groupList.length; j++) {
+        const g1 = groupList[i];
+        const g2 = groupList[j];
+        const combinedCount = g1.frequency + g2.frequency;
+        const hitRate = combinedCount / total;
+
+        if (hitRate > bestHitRate) {
+          bestHitRate = hitRate;
+          bestCombo = {
+            groups: [g1.group, g2.group],
+            label: `${labels[g1.group]}+${labels[g2.group]}`,
+            hitRate: (hitRate * 100).toFixed(1),
+            combinedCount,
+            totalPeriods: total
+          };
+        }
+      }
+    }
+
+    return {
+      groups: groupList,
+      recommendation: bestCombo
+    };
   }
 
   // 杀组预测
