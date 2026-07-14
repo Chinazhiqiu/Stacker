@@ -14,6 +14,7 @@ class PC28FrontendEliteApp {
     this._refreshIntervalId = null;
     this._isFetching = false;
     this._workerMessageCounter = 0;
+    this.lastPrediction = null;
   }
 
   /**
@@ -242,7 +243,16 @@ class PC28FrontendEliteApp {
         killGroup: predictions[4]
       };
 
-      // 保存预测结果
+      // 保存最近一次预测，用于命中判定
+      this.lastPrediction = {
+        singleDouble: this.predictions.singleDouble?.prediction || null,
+        bigSmall: this.predictions.bigSmall?.prediction || null,
+        doubleGroupGroups: this.predictions.doubleGroup?.recommendation?.groups || null,
+        doubleGroupLabel: this.predictions.doubleGroup?.recommendation?.label || null,
+        timestamp: Date.now()
+      };
+
+      // 保存预测结果到数据库
       await this.db.savePrediction({
         type: 'comprehensive',
         results: this.predictions,
@@ -344,6 +354,54 @@ class PC28FrontendEliteApp {
 
     this.worker.addEventListener('message', handler);
     this.worker.postMessage({ ...message, id: messageId });
+  }
+
+  /**
+   * 检查某期开奖结果是否命中预测
+   */
+  checkPredictionHit(draw) {
+    if (!this.lastPrediction) return null;
+
+    const num = draw.number;
+    const isOdd = num % 2 === 1;
+    const isBig = num >= 14;
+
+    // 判定该号码属于哪个组
+    let drawGroup;
+    if (isOdd && !isBig) drawGroup = 'ODD_SMALL';
+    else if (isOdd && isBig) drawGroup = 'ODD_BIG';
+    else if (!isOdd && !isBig) drawGroup = 'EVEN_SMALL';
+    else drawGroup = 'EVEN_BIG';
+
+    const result = {
+      singleDouble: null,
+      bigSmall: null,
+      doubleGroup: null,
+      anyHit: false
+    };
+
+    // 单双命中判定
+    if (this.lastPrediction.singleDouble) {
+      const predicted = this.lastPrediction.singleDouble;
+      const actual = isOdd ? 'ODD' : 'EVEN';
+      result.singleDouble = (predicted === actual);
+    }
+
+    // 大小命中判定
+    if (this.lastPrediction.bigSmall) {
+      const predicted = this.lastPrediction.bigSmall;
+      const actual = isBig ? 'BIG' : 'SMALL';
+      result.bigSmall = (predicted === actual);
+    }
+
+    // 双组命中判定
+    if (this.lastPrediction.doubleGroupGroups) {
+      result.doubleGroup = this.lastPrediction.doubleGroupGroups.includes(drawGroup);
+    }
+
+    result.anyHit = result.singleDouble || result.bigSmall || result.doubleGroup;
+
+    return result;
   }
 
   /**
@@ -457,6 +515,7 @@ class PC28FrontendEliteApp {
       await Promise.all(cacheNames.map(name => caches.delete(name)));
       // 重置预测状态
       this.predictions = {};
+      this.lastPrediction = null;
       return { code: 0, msg: '所有数据已清空' };
     } catch (err) {
       return { code: 1, msg: err.message };
